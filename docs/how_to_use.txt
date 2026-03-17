@@ -1,0 +1,95 @@
+========================================
+ RLC Layer — How To Use Guide
+========================================
+
+All configuration is done via the Config struct in:
+  5G/include/common.h
+
+You construct a Config, set the fields you want, then pass it to RlcLayer.
+
+
+----------------------------------------
+ 1. SWITCHING BETWEEN V1 AND OPTIMIZED
+----------------------------------------
+
+The key field is rlc_opt_level in Config:
+
+  cfg.rlc_opt_level = 0;   // V1 baseline (default)
+  cfg.rlc_opt_level = 1;   // Optimized (reserve, move, memcpy, sort skip)
+
+Example — run with V1 baseline:
+
+  Config cfg;
+  cfg.rlc_opt_level = 0;
+  RlcLayer tx(cfg), rx(cfg);
+
+Example — run with optimizations enabled:
+
+  Config cfg;
+  cfg.rlc_opt_level = 1;
+  RlcLayer tx(cfg), rx(cfg);
+
+The two preset helpers in 5G/tests/test_rlc.cpp are:
+
+  make_v1_config()        -> rlc_mode=1 (UM), rlc_opt_level=0
+  make_optimized_config() -> rlc_mode=2 (AM), rlc_opt_level=1
+
+
+----------------------------------------
+ 2. SWITCHING BETWEEN UM AND AM MODE
+----------------------------------------
+
+  cfg.rlc_mode = 1;   // UM (Unacknowledged Mode) — default
+  cfg.rlc_mode = 2;   // AM (Acknowledged Mode, with retransmission)
+
+
+----------------------------------------
+ 3. ENABLING CSV BENCHMARK LOGGING
+----------------------------------------
+
+Open 5G/tests/test_rlc.cpp and go to the bottom of main().
+Find this block (around line 901):
+
+  Config bench_cfg;
+  // bench_cfg.benchmark_csv_path = "rlc_bench.csv";  // uncomment to write CSV
+  profile_variants(bench_cfg.benchmark_csv_path);
+
+To enable CSV output, uncomment the second line:
+
+  bench_cfg.benchmark_csv_path = "rlc_bench.csv";
+
+You can also set an absolute path:
+
+  bench_cfg.benchmark_csv_path = "/home/user/results/rlc_bench.csv";
+
+The CSV is written to the current working directory when the binary runs.
+It contains one row per iteration with these columns:
+
+  pkt_size, variant, iteration, tx_us, rx_us, pass
+
+Total rows: 20,000  (5 packet sizes x 4 variants x 1000 iterations)
+
+
+----------------------------------------
+ 4. BUILDING AND RUNNING
+----------------------------------------
+
+Debug build:
+  cmake -B 5G/build -DCMAKE_BUILD_TYPE=Debug -S 5G
+  cmake --build 5G/build --target test_rlc
+  5G/build/test_rlc
+
+Release build (shows real performance gains, use for benchmarking):
+  cmake -B 5G/build_opt -DCMAKE_BUILD_TYPE=Release -S 5G
+  cmake --build 5G/build_opt --target test_rlc
+  5G/build_opt/test_rlc
+
+
+----------------------------------------
+ 5. OTHER USEFUL CONFIG FIELDS
+----------------------------------------
+
+  cfg.rlc_max_pdu_size = 500;   // max PDU size in bytes (affects segmentation)
+  cfg.rlc_poll_pdu     = 64;    // AM mode: send P-bit every N PDUs
+  cfg.loss_rate        = 0.0;   // AM RX loss simulation (0.0 = no loss, 0.1 = 10%)
+  cfg.rlc_am_sn_length = 12;    // AM sequence number bit width (always 12)

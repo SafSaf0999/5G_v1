@@ -62,7 +62,13 @@ struct Config {
     // 0 = V1 unoptimized baseline (no reserve, copy push_back, insert-loop reassembly, always sort)
     // 1 = optimized (reserve, std::move, resize+memcpy, 2-segment fast path)
     // Default 0 preserves V1 behavior for all existing tests.
-    uint8_t  rlc_opt_level       = 0;
+    uint8_t  rlc_opt_level       = 1;
+
+    // --- Benchmark CSV output (Pair B) ---
+    // If non-empty, profile_variants() writes one row per iteration to this file.
+    // Columns: pkt_size, variant, iteration, tx_us, rx_us, pass
+    // Default empty = no CSV output.
+    std::string benchmark_csv_path = "";
 };
 
 // ============================================================

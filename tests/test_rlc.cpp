@@ -16,11 +16,13 @@
 
 #include "rlc.h"
 #include <iostream>
+#include <fstream>
 #include <cassert>
 #include <cstring>
 #include <chrono>
 #include <iomanip>
 #include <cstdlib>
+#include <string>
 
 static int tests_run    = 0;
 static int tests_passed = 0;
@@ -738,9 +740,19 @@ static void test_prop_status_pdu_round_trip() {
 // ============================================================
 // Benchmark: fair comparison using rlc_opt_level config switch
 // ============================================================
-static void profile_variants() {
+static void profile_variants(const std::string& csv_path = "") {
     const std::vector<uint32_t> pkt_sizes = {100, 500, 1000, 1400, 3000};
     const int ITERATIONS = 1000;
+
+    // Optional CSV output — one row per iteration
+    std::ofstream csv;
+    if (!csv_path.empty()) {
+        csv.open(csv_path);
+        if (csv.is_open())
+            csv << "pkt_size,variant,iteration,tx_us,rx_us,pass\n";
+        else
+            std::cerr << "  WARNING: could not open CSV file: " << csv_path << "\n";
+    }
 
     std::cout << "\n=======================================================\n";
     std::cout << "PROFILING: RLC Layer — V1 (opt=0) vs Optimized (opt=1)\n";
@@ -793,9 +805,23 @@ static void profile_variants() {
                 }
                 auto t2 = std::chrono::high_resolution_clock::now();
 
-                total_tx += std::chrono::duration<double, std::micro>(t1 - t0).count();
-                total_rx += std::chrono::duration<double, std::micro>(t2 - t1).count();
-                if (result.size() != 1 || !buffers_equal(sdu, result[0])) all_pass = false;
+                double iter_tx = std::chrono::duration<double, std::micro>(t1 - t0).count();
+                double iter_rx = std::chrono::duration<double, std::micro>(t2 - t1).count();
+                bool   iter_ok = (result.size() == 1 && buffers_equal(sdu, result[0]));
+
+                total_tx += iter_tx;
+                total_rx += iter_rx;
+                if (!iter_ok) all_pass = false;
+
+                // Write per-iteration CSV row
+                if (csv.is_open()) {
+                    csv << sz << ","
+                        << v.label << ","
+                        << i << ","
+                        << std::fixed << std::setprecision(4) << iter_tx << ","
+                        << iter_rx << ","
+                        << (iter_ok ? "1" : "0") << "\n";
+                }
             }
             total_tx /= ITERATIONS;
             total_rx /= ITERATIONS;
@@ -822,6 +848,11 @@ static void profile_variants() {
         }
     }
     std::cout << "  Speedup > 1.0x means optimized is faster\n\n";
+
+    if (csv.is_open()) {
+        csv.close();
+        std::cout << "  CSV written to: " << csv_path << "\n";
+    }
 }
 
 
@@ -864,7 +895,11 @@ int main() {
     std::cout << "\n  " << tests_passed << " / " << tests_run << " tests passed\n";
 
     // ---- Benchmark ----
-    profile_variants();
+    // To enable CSV output, set benchmark_csv_path in Config, e.g.:
+    //   Config bench_cfg; bench_cfg.benchmark_csv_path = "rlc_bench.csv";
+    Config bench_cfg;
+    // bench_cfg.benchmark_csv_path = "rlc_bench.csv";  // uncomment to write CSV
+    profile_variants(bench_cfg.benchmark_csv_path);
 
     return (tests_passed == tests_run) ? 0 : 1;
 }

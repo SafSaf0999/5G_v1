@@ -1,0 +1,81 @@
+========================================
+ Commit Notes — Pair B (Member 3 & 4)
+ RLC Latency Optimization
+========================================
+
+Branch: [your branch name here]
+Date:   [fill in before pushing]
+
+
+----------------------------------------
+ COMMIT MESSAGE (suggested)
+----------------------------------------
+
+feat(rlc): AM/UM latency optimizations + benchmark with CSV output
+
+- Add AM mode (rlc_mode=2) to RlcLayer alongside existing UM mode
+- Add rlc_opt_level config switch (0=V1 baseline, 1=optimized)
+- Optimizations: reserve(), std::move push_back, resize()+memcpy
+  reassembly, 2-segment sort skip in both UM and AM paths
+- Add STATUS PDU build/parse (12-bit ACK_SN + NACK chaining)
+- Add AM RX: in-order delivery, out-of-order buffering, gap NACK
+- Add loss simulation via loss_rate config field
+- Add benchmark (profile_variants): V1-UM vs OPT-UM, V1-AM vs OPT-AM
+- Add CSV logging via benchmark_csv_path config field
+- All 26 tests pass (23 original V1 + 3 new AM/property tests)
+
+
+----------------------------------------
+ FILES CHANGED
+----------------------------------------
+
+5G/include/common.h
+  - Added: rlc_am_sn_length, rlc_poll_pdu, loss_rate, rlc_opt_level
+  - Added: benchmark_csv_path (CSV output path, default empty = disabled)
+
+5G/include/rlc.h
+  - Added AM TX state: am_tx_next_sn_, retx_buf_, poll_sn_, poll_pdu_count_
+  - Added AM RX state: rx_next_, rx_highest_status_, am_rx_buffer_
+  - Added StatusPdu struct and all new private method declarations
+
+5G/src/rlc.cpp
+  - Refactored: UM logic moved to process_tx_um() / process_rx_um()
+  - Added: process_tx_am(), process_rx_am(), try_reassemble_am()
+  - Added: build_status_pdu(), parse_status_pdu()
+  - Both V1 and optimized paths in single file, dispatched by rlc_opt_level
+
+5G/tests/test_rlc.cpp
+  - Added 21 new tests (AM TX, STATUS PDU, AM RX, property-based)
+  - Added profile_variants() benchmark with per-variant timing table
+  - Added CSV logging (20,000 rows: 5 sizes x 4 variants x 1000 iters)
+
+
+----------------------------------------
+ TEST RESULTS
+----------------------------------------
+
+26 / 26 tests pass
+
+Benchmark results (Release -O2):
+  UM 100B:   TX 1.40x  RX 1.14x speedup
+  UM 500B:   TX 1.51x  RX 1.23x speedup
+  UM 1000B:  TX 1.57x  RX 1.25x speedup
+  UM 1400B:  TX 1.44x  RX 1.16x speedup
+  UM 3000B:  TX 1.56x  RX 1.55x speedup
+  AM 100B:   TX 1.03x  RX 1.04x speedup
+  AM 500B:   TX 1.41x  RX 1.01x speedup
+  AM 1000B:  TX 1.43x  RX 1.19x speedup
+  AM 1400B:  TX 1.44x  RX 1.16x speedup
+  AM 3000B:  TX 1.30x  RX 1.02x speedup
+
+
+----------------------------------------
+ NOTES FOR REVIEWER
+----------------------------------------
+
+- Public API unchanged: process_tx(), process_rx(), reset() signatures intact
+- Default Config (rlc_opt_level=0, rlc_mode=1) is byte-identical to V1
+- All 23 original tests pass with default Config
+- CSV output is disabled by default (benchmark_csv_path = "")
+- No external libraries added; C++17 only
+- CMakeLists.txt unchanged (no new source files added)
