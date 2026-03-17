@@ -88,3 +88,4 @@ private:
     // ---- Shared STATUS PDU parser ----
     StatusPdu parse_status_pdu(const ByteBuffer& pdu);
 };
+
